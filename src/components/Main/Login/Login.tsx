@@ -1,7 +1,9 @@
-import { type FC, type FormEventHandler } from 'react';
+import { MouseEventHandler, useEffect, type FC, type FormEventHandler } from 'react';
 import {
   type authorizationResponseType,
+  oidcAuthorizationResponseType,
   parseAuthorizationResponseType,
+  parseOidcAuthorizationResponseType,
 } from '../../../types/api';
 import {
   type frontendErrorType,
@@ -23,9 +25,13 @@ import ApiError from '../../UI/Api/ApiError';
 import InputTextField from '../../UI/FormMui/InputTextField';
 import FormFooter from '../../UI/FormMui/FormFooter';
 import Form from '../../UI/FormMui/Form';
+import Button from '../../UI/Button/Button';
+import { useSearchParams } from 'react-router-dom';
 
 // backend API path
 const LOGIN_URL = '/v1/app/auth/login';
+const OIDC_URL = '/v1/app/auth/oidc';
+const OIDC_LOGIN_URL = '/v1/app/auth/oidclogin';
 
 // form shape
 type formObj = {
@@ -55,6 +61,71 @@ const Login: FC = () => {
 
   // form data change handler
   const inputChangeHandler = inputHandlerFuncMaker(setFormState);
+
+  const [ searchParams ] = useSearchParams();
+  if (searchParams.get('state') != null && searchParams.get('code') != null) {
+    useEffect(() => {
+      const authData = localStorage.getItem('oidcAuthData');
+      console.log(authData);
+
+      if (authData == null) {
+        window.location.href = `${window.location.origin}/${window.location.pathname}`;
+        return;
+      }
+
+      apiCall<authorizationResponseType>(
+        'POST',
+          OIDC_LOGIN_URL,
+          { 
+            code: searchParams.get('code'),
+            state: searchParams.get('state'),
+            "session_state": searchParams.get('session_state'),
+            "iss": searchParams.get('iss'),
+            "sid": searchParams.get('sid'),
+            "original_request": JSON.parse(authData || '{}') 
+          },
+          parseAuthorizationResponseType
+        ).then(({ responseData, error }) => {
+          localStorage.removeItem('oidcAuthData');
+          // set auth if success
+          if (responseData) {
+            setAuth(responseData.authorization);
+          } else {
+            // failed, clear form and set error
+            setFormState({
+              ...blankForm,
+              sendError: error,
+            });
+          }
+        });
+      }, [ searchParams ]);
+  }
+  
+
+  const oidcClickHandler: MouseEventHandler = (event) => {
+    event.preventDefault();
+    
+    apiCall<oidcAuthorizationResponseType>(
+      'POST',
+      OIDC_URL,
+      {},
+      parseOidcAuthorizationResponseType
+    ).then(({ responseData, error }) => {
+      // set auth if success
+      if (responseData) {
+        responseData.authorization.callback_url = window.location.href;
+        localStorage.setItem('oidcAuthData', JSON.stringify(responseData.authorization));
+
+        window.location.href = responseData.authorization.redirect_url + "&redirect_uri=" + window.location.href;
+      } else {
+        // failed, clear form and set error
+        setFormState({
+          ...blankForm,
+          sendError: error,
+        });
+      }
+    });
+  };
 
   // submit login form
   const submitFormHandler: FormEventHandler = (event) => {
@@ -143,7 +214,7 @@ const Login: FC = () => {
                 message={formState.sendError.message}
               />
             )}
-
+        
           <FormFooter
             resetOnClick={() => setFormState(blankForm)}
             disabledAllButtons={axiosSendState.isSending}
@@ -153,6 +224,9 @@ const Login: FC = () => {
             }
           />
         </Form>
+        <Button color='primary' type='submit' onClick={oidcClickHandler} sx={{ width: '100%', mr: 2, mt: 2 }}>
+            Single Sign-On
+        </Button>
       </Paper>
     </Container>
   );

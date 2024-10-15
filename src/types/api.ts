@@ -41,13 +41,30 @@ const authorization = z.object({
   session_token_claims: authorizationTokenClaims,
 });
 
+const oidcAuthorization = z.object({
+  redirect_url: z.string().min(1),
+  state: z.string().min(1),
+  verifier: z.string().min(1),
+  challenge: z.string().min(1),
+  callback_url: z.string().optional(),
+})
+
 export type authorizationType = z.infer<typeof authorization>;
 export const parseAuthorizationType = (unk: unknown): authorizationType => {
   return authorization.parse(unk);
 };
 
+export type oidcAuthorizationType = z.infer<typeof oidcAuthorization>;
+export const parseOidcAuthorizationType = (unk: unknown): oidcAuthorizationType => {
+  return oidcAuthorization.parse(unk);
+};
+
 const authorizationResponse = basicGoodResponse.extend({
   authorization: authorization,
+});
+
+const oidcAuthorizationResponse = basicGoodResponse.extend({
+  authorization: oidcAuthorization,
 });
 
 export type authorizationResponseType = z.infer<typeof authorizationResponse>;
@@ -55,6 +72,13 @@ export const parseAuthorizationResponseType = (
   unk: unknown
 ): authorizationResponseType => {
   return authorizationResponse.parse(unk);
+};
+
+export type oidcAuthorizationResponseType = z.infer<typeof oidcAuthorizationResponse>;
+export const parseOidcAuthorizationResponseType = (
+  unk: unknown
+): oidcAuthorizationResponseType => {
+  return oidcAuthorizationResponse.parse(unk);
 };
 
 // logout
